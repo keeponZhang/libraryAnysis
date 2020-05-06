@@ -54,15 +54,19 @@ public final class AndroidRefWatcherBuilder extends RefWatcherBuilder<AndroidRef
    * Creates a {@link RefWatcher} instance and starts watching activity references (on ICS+).
    */
   public RefWatcher buildAndInstall() {
+    //创建一个所需要的RefWatcher
     RefWatcher refWatcher = build();
     if (refWatcher != DISABLED) {
+      ///把 DisplayLeakActivity 设置为可用  用于显示 DisplayLeakActivity 就是我们看到的那个分析界面
       LeakCanary.enableDisplayLeakActivity(context);
+      //启动一个ActivityRefWatcher
       ActivityRefWatcher.install((Application) context, refWatcher);
     }
     return refWatcher;
   }
 
   @Override protected boolean isDisabled() {
+    //如果在主线程 那么返回一个无用的 RefWatcher  详解 1.1
     return LeakCanary.isInAnalyzerProcess(context);
   }
 

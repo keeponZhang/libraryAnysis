@@ -100,6 +100,9 @@ public final class HeapAnalyzer {
    * Searches the heap dump for a {@link KeyedWeakReference} instance with the corresponding key,
    * and then computes the shortest strong reference path from that instance to the GC roots.
    */
+  //1.把hpro文件转成snapshot
+  //2.优化gcroots
+  //3.找出泄露的对象和泄露对象的最短路径
   public AnalysisResult checkForLeak(File heapDumpFile, String referenceKey) {
     long analysisStartNanoTime = System.nanoTime();
 
@@ -110,17 +113,22 @@ public final class HeapAnalyzer {
 
     try {
       HprofBuffer buffer = new MemoryMappedFileBuffer(heapDumpFile);
+      //解析器
       HprofParser parser = new HprofParser(buffer);
+      //具体解析
       Snapshot snapshot = parser.parse();
+      //去重
       deduplicateGcRoots(snapshot);
 
+      //根据需要检测的key来查询解析结果中是否有我们需要的对象
       Instance leakingRef = findLeakingReference(referenceKey, snapshot);
 
       // False alarm, weak reference was cleared in between key check and heap dump.
       if (leakingRef == null) {
+        //表示没有内存泄露
         return noLeak(since(analysisStartNanoTime));
       }
-
+      //转换成路径
       return findLeakTrace(analysisStartNanoTime, snapshot, leakingRef);
     } catch (Throwable e) {
       return failure(e, since(analysisStartNanoTime));
@@ -156,10 +164,14 @@ public final class HeapAnalyzer {
   }
 
   private Instance findLeakingReference(String key, Snapshot snapshot) {
+    //在snapshot快照中找到第一个弱引用
+    //遍历这个对象的所有实例
+    //如果这个key值和最开始定义封装的key值相同的话，返回这个泄露对象
     ClassObj refClass = snapshot.findClass(KeyedWeakReference.class.getName());
     List<String> keysFound = new ArrayList<>();
     for (Instance instance : refClass.getInstancesList()) {
       List<ClassInstance.FieldValue> values = classInstanceValues(instance);
+      //找到所需要的key值
       String keyCandidate = asString(fieldValue(values, "key"));
       if (keyCandidate.equals(key)) {
         return fieldValue(values, "referent");
@@ -172,7 +184,7 @@ public final class HeapAnalyzer {
 
   private AnalysisResult findLeakTrace(long analysisStartNanoTime, Snapshot snapshot,
       Instance leakingRef) {
-
+    //分析hpro文件，关心两种gcroot，静态和正在运行的线程所持有
     ShortestPathFinder pathFinder = new ShortestPathFinder(excludedRefs);
     ShortestPathFinder.Result result = pathFinder.findPath(snapshot, leakingRef);
 
@@ -181,6 +193,7 @@ public final class HeapAnalyzer {
       return noLeak(since(analysisStartNanoTime));
     }
 
+    //生成内存泄露调用站
     LeakTrace leakTrace = buildLeakTrace(result.leakingNode);
 
     String className = leakingRef.getClassObj().getClassName();

@@ -81,6 +81,7 @@ public class DisplayLeakService extends AbstractAnalysisResultService {
     }
     // New notification id every second.
     int notificationId = (int) (SystemClock.uptimeMillis() / 1000);
+    //LeackCanaryInternals发送Notification到状态栏
     showNotification(this, contentTitle, contentText, pendingIntent, notificationId);
     afterDefaultHandling(heapDump, result, leakInfo);
   }

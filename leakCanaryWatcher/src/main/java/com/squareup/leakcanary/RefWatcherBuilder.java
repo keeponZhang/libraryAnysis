@@ -52,6 +52,7 @@ public class RefWatcherBuilder<T extends RefWatcherBuilder<T>> {
   /** Creates a {@link RefWatcher}. */
   public final RefWatcher build() {
     if (isDisabled()) {
+      //如果在主进程 那么返回一个无用的 RefWatcher  详解 1.1
       return RefWatcher.DISABLED;
     }
 

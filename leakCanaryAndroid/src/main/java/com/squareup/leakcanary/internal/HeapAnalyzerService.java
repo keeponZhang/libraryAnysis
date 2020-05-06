@@ -50,12 +50,14 @@ public final class HeapAnalyzerService extends IntentService {
       CanaryLog.d("HeapAnalyzerService received a null intent, ignoring.");
       return;
     }
+    //获取参数
     String listenerClassName = intent.getStringExtra(LISTENER_CLASS_EXTRA);
     HeapDump heapDump = (HeapDump) intent.getSerializableExtra(HEAPDUMP_EXTRA);
-
+    //分析堆内存的，传入的是排除系统的bug引起的内存泄露
     HeapAnalyzer heapAnalyzer = new HeapAnalyzer(heapDump.excludedRefs);
 
     AnalysisResult result = heapAnalyzer.checkForLeak(heapDump.heapDumpFile, heapDump.referenceKey);
+    //调用回调
     AbstractAnalysisResultService.sendResultToListener(this, listenerClassName, heapDump, result);
   }
 }

@@ -54,6 +54,7 @@ public final class ActivityRefWatcher {
         }
 
         @Override public void onActivityDestroyed(Activity activity) {
+            //关联到ActivityRefWatcher
           ActivityRefWatcher.this.onActivityDestroyed(activity);
         }
       };
@@ -71,12 +72,14 @@ public final class ActivityRefWatcher {
   }
 
   void onActivityDestroyed(Activity activity) {
+      //调用watch
     refWatcher.watch(activity);
   }
 
   public void watchActivities() {
     // Make sure you don't get installed twice.
     stopWatchingActivities();
+    //重新注册，监听activity的生命周期
     application.registerActivityLifecycleCallbacks(lifecycleCallbacks);
   }
 

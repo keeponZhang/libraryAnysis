@@ -36,6 +36,7 @@ public final class ServiceHeapDumpListener implements HeapDump.Listener {
 
   @Override public void analyze(HeapDump heapDump) {
     checkNotNull(heapDump, "heapDump");
+    //会开启一个服务去分析
     HeapAnalyzerService.runAnalysis(context, heapDump, listenerServiceClass);
   }
 }

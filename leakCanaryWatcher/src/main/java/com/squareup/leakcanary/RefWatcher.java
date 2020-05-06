@@ -37,13 +37,21 @@ public final class RefWatcher {
 
   public static final RefWatcher DISABLED = new RefWatcherBuilder<>().build();
 
+  //内存泄露检测用的 Executor
   private final WatchExecutor watchExecutor;
+  //用于查询是否在 debug 调试模式下，调试中不会执行内存泄漏检测
   private final DebuggerControl debuggerControl;
+  //用来处理gc，判断内存泄露前，再次gc
   private final GcTrigger gcTrigger;
+  //dump出文件
   private final HeapDumper heapDumper;
+  //已经产生了内存队列的key
   private final Set<String> retainedKeys;
+  //引用队列，
   private final ReferenceQueue<Object> queue;
+  //分析产生heap文件的对调
   private final HeapDump.Listener heapdumpListener;
+  //排除系统造成的内存泄露
   private final ExcludedRefs excludedRefs;
 
   RefWatcher(WatchExecutor watchExecutor, DebuggerControl debuggerControl, GcTrigger gcTrigger,
@@ -81,17 +89,20 @@ public final class RefWatcher {
     checkNotNull(watchedReference, "watchedReference");
     checkNotNull(referenceName, "referenceName");
     final long watchStartNanoTime = System.nanoTime();
+    //添加唯一的key值
     String key = UUID.randomUUID().toString();
     retainedKeys.add(key);
+    //这是一个弱引用的子类拓展类 用于 我们之前所说的 watchedReference 和  queue 的联合使用
     final KeyedWeakReference reference =
         new KeyedWeakReference(watchedReference, key, referenceName, queue);
-
+  //开启异步线程进行分析工作
     ensureGoneAsync(watchStartNanoTime, reference);
   }
 
   private void ensureGoneAsync(final long watchStartNanoTime, final KeyedWeakReference reference) {
     watchExecutor.execute(new Retryable() {
       @Override public Retryable.Result run() {
+        //确认系统已经进行了内存回收了，不要进行误判了，这是容错性考虑
         return ensureGone(reference, watchStartNanoTime);
       }
     });
@@ -102,27 +113,35 @@ public final class RefWatcher {
     long gcStartNanoTime = System.nanoTime();
     long watchDurationMs = NANOSECONDS.toMillis(gcStartNanoTime - watchStartNanoTime);
 
+    //清除已经到达引用队列的弱引用
     removeWeaklyReachableReferences();
 
     if (debuggerControl.isDebuggerAttached()) {
       // The debugger can create false leaks.
       return RETRY;
     }
+
     if (gone(reference)) {
+      //已经不属于内存泄露
       return DONE;
     }
+    //如果该对象没有改变可达性状态，调用gc来进行手动回收
     gcTrigger.runGc();
     removeWeaklyReachableReferences();
     if (!gone(reference)) {
+      //已经出现了内存泄露
       long startDumpHeap = System.nanoTime();
       long gcDurationMs = NANOSECONDS.toMillis(startDumpHeap - gcStartNanoTime);
 
+      ////dump 出 Head 报告
       File heapDumpFile = heapDumper.dumpHeap();
       if (heapDumpFile == RETRY_LATER) {
         // Could not dump the heap.
         return RETRY;
       }
       long heapDumpDurationMs = NANOSECONDS.toMillis(System.nanoTime() - startDumpHeap);
+      //最后进行分析 这份 HeapDump
+      //LeakCanary 分析内存泄露用的是一个第三方工具 HAHA 别笑 真的是这个名字
       heapdumpListener.analyze(
           new HeapDump(heapDumpFile, reference.key, reference.name, excludedRefs, watchDurationMs,
               gcDurationMs, heapDumpDurationMs));
